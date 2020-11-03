@@ -52,8 +52,6 @@ PubSubClient mqtt_client(wifiClient);
 #define DEV_4 14 //4
 #define DEV_8 12 //8
 
-
-
 //Allocated Sensor Pins
 #define CS_1 32
 #define VS_1 33
@@ -90,9 +88,6 @@ float avg_volt = 0.0;
 float avg_temp = 0.0;
 uint64_t prevPub = 0;
 uint64_t prevSample = 0;
-
-
-
 
 //-----------------Setup-----------------
 void setup()
@@ -137,10 +132,7 @@ void setup()
     LCD_Print("SD_Init");
     Serial.println("Initializing SD Card.");
     SD.mkdir("/devices");
-    SD.mkdir("/devices/id");
     SD.mkdir("/devices/dev");
-    SD.mkdir("/devices/cs");
-    SD.mkdir("/devices/number");
     SD.mkdir("/credentials");
     SD.mkdir("/credentials/wifi");
     SD.mkdir("/credentials/mqtt");
@@ -230,7 +222,7 @@ void setup()
 
 void loop()
 {
-  
+
     mqtt_client.loop();
 
     //---------------------------------------------------------------------------
@@ -418,7 +410,7 @@ void RelayOff(uint8_t device)
 
     return - None.
 
-    */
+*/
 void LCD_Print(String message)
 {
     lcd.clear();
@@ -442,7 +434,7 @@ void LCD_Print(String message)
     WiFi SSID -                  /credentials/wifi/ssid.txt
     WiFi Password -              /credentials/wifi/pass.txt
 
-    */
+*/
 void GetCredentials(fs::FS &fs)
 {
     //Wifi
@@ -463,7 +455,7 @@ void GetCredentials(fs::FS &fs)
 
     return - None.
 
-    */
+*/
 void WiFi_Connect()
 {
     WiFi.begin(ssid.c_str(), pass.c_str());
@@ -481,7 +473,7 @@ void WiFi_Connect()
 
     return - None.
 
-    */
+*/
 void mqtt_publish(StaticJsonDocument<300> JSON_Buffer, String subscription)
 {
     char Payload_Char[300];
@@ -491,6 +483,7 @@ void mqtt_publish(StaticJsonDocument<300> JSON_Buffer, String subscription)
     }
     else
     {
+        mqtt_reconnect();
         Serial.println("Failed to Send Message.");
     }
 }
@@ -506,7 +499,7 @@ void mqtt_publish(StaticJsonDocument<300> JSON_Buffer, String subscription)
 
     return - None.
 
-    */
+*/
 void mqtt_message(char *topic, byte *payload, unsigned int length)
 {
     String hub_id = ReadData("/credentials/mqtt/id.txt");
@@ -582,7 +575,7 @@ void mqtt_message(char *topic, byte *payload, unsigned int length)
 
     return - None.
 
-    */
+*/
 void mqtt_reconnect()
 {
     while (!mqtt_client.connected())
@@ -604,14 +597,14 @@ void mqtt_reconnect()
 }
 
 /*
-        Writes information to SD Card
-        fs      -   SD Card handle
-        path    -   path directory + extension
-        message -   Data to be writent to file
-        
-        return - None.
+    Writes information to SD Card
+    fs      -   SD Card handle
+    path    -   path directory + extension
+    message -   Data to be writent to file
+    
+    return - None.
 
-    */
+*/
 void writeFile(fs::FS &fs, const char *path, const char *message)
 {
     File file = fs.open(path, FILE_WRITE);
@@ -634,12 +627,12 @@ void writeFile(fs::FS &fs, const char *path, const char *message)
 }
 
 /*
-        Reads Information from a defined file
-        path    -   path directory + extension
+    Reads Information from a defined file
+    path    -   path directory + extension
         
-        return - Data inside file.
+    return - Data inside file.
 
-    */
+*/
 String ReadData(String path)
 {
     File file = SD.open(path.c_str());
@@ -656,6 +649,14 @@ String ReadData(String path)
     return String(hold_str);
 }
 
+/*
+    Dynamically updates rolling average
+    mean    -   Current average
+    newVal  -   Newly measured value
+        
+    return - New updated average.
+
+*/
 float rollAverage(float mean, uint16_t newVal)
 {
     uint8_t N = 100;
@@ -664,6 +665,12 @@ float rollAverage(float mean, uint16_t newVal)
     return mean;
 }
 
+/*
+    Samples data (temperature / voltage / current)
+        
+    return - Updated rolling averages for all measurements.
+
+*/
 void DataSampling()
 {
     prevSample = millis();
@@ -677,6 +684,11 @@ void DataSampling()
     avg_temp = rollAverage(avg_temp, Temp);
 }
 
+/*
+    Pushes data to MQTT
+        
+    return - Published MQTT Data
+*/
 void dataPush()
 {
     StaticJsonDocument<300> Payload_JSON;
@@ -684,11 +696,10 @@ void dataPush()
     float Vref = 3.3;
     float buffSize = 1023.0;
 
-    
     String subscription = "sensors/" + ReadData("/credentials/mqtt/id.txt");
     //Publishing Payload
-    Payload_JSON["ID"] = (ReadData("/credentials/mqtt/id.txt")).toInt();  
-    Payload_JSON["CURR"] = (float)(CS_1_OS - avg_curr) * (Vref / buffSize) / 0.066 ;
+    Payload_JSON["ID"] = (ReadData("/credentials/mqtt/id.txt")).toInt();
+    Payload_JSON["CURR"] = (float)(CS_1_OS - avg_curr) * (Vref / buffSize) / 0.066;
     Payload_JSON["VOLT"] = (float)avg_volt * (Vref / buffSize);
     Payload_JSON["TEMP"] = (float)avg_temp;
     mqtt_publish(Payload_JSON, subscription);
@@ -697,21 +708,20 @@ void dataPush()
 
 /*
     Calibrates Current Sensor, and gets an offset value
-
 */
 void CalibrateCurrentSensor()
 {
     delay(5000);
-    float acc = 0.0;             //Accumulator
+    float acc = 0.0; //Accumulator
 
     Serial.println("Calibrating Sensors...");
     LCD_Print("Calib...");
     RelaySetAll(1);
     Serial.println("Filling Rolling Average Buffers..");
-    for(uint16_t i = 0; i < 50000; i++)
+    for (uint16_t i = 0; i < 50000; i++)
     {
         DataSampling();
-    }    
+    }
     Serial.println("Finding Current Offset..");
     delay(1000);
     for (uint16_t i = 0; i < 10000; i++)
@@ -734,7 +744,7 @@ void CalibrateCurrentSensor()
 */
 void RelaySetAll(uint8_t state)
 {
-    if(state == 1)
+    if (state == 1)
     {
         Serial.println("All Outlets Off");
         LCD_Print("All_OFF_");
@@ -743,7 +753,7 @@ void RelaySetAll(uint8_t state)
     {
         Serial.println("All Outlets On");
         LCD_Print("All_ON__");
-    } 
+    }
     digitalWrite(DEV_1, state);
     digitalWrite(DEV_2, state);
     digitalWrite(DEV_3, state);
@@ -756,12 +766,11 @@ void RelaySetAll(uint8_t state)
 
 int8_t getDevicePin(uint8_t device)
 {
-  //Pin Linked to Device Number
-  String path = "/devices/dev/" + String(device) + ".txt";
-  String hold_str = ReadData(path);
+    //Pin Linked to Device Number
+    String path = "/devices/dev/" + String(device) + ".txt";
+    String hold_str = ReadData(path);
 
-  return (int8_t)hold_str.toInt();
+    return (int8_t)hold_str.toInt();
 }
-
 
 //------END
