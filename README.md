@@ -6,7 +6,6 @@
 #### Description
 Code that is flashed onto Hub MCU. Code is compatible with various ESP32 MCU boards that are compatable with ArduinoIDE.
 
-
 ### Dependacies
 3rd Party dependacies.
 - [LiquidCrystal I2C](https://www.arduino.cc/reference/en/libraries/liquidcrystal-i2c/)
